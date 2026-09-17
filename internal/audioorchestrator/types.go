@@ -31,6 +31,8 @@ type Segment struct {
 	Voice       string
 	Style       string
 	StyleDegree float64
+	Emotion     string
+	EmotionScale string
 	SFXType     string
 	Rate         string
 	Pitch        string

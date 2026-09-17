@@ -167,8 +167,7 @@ func hasSpokenOrSFXContent(s string) bool {
 	}
 	lower := strings.ToLower(s)
 	return strings.Contains(lower, "[som:") || strings.Contains(lower, "[sfx:") ||
-		strings.Contains(lower, "[teclado") || strings.Contains(lower, "[respiracao") ||
-		strings.Contains(lower, "[suspiro") || strings.Contains(lower, "[tosse") ||
+		strings.Contains(lower, "[teclado") ||
 		strings.Contains(lower, "[hum") || strings.Contains(lower, "[entendi")
 }
 

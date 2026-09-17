@@ -40,13 +40,10 @@ Projetado especificamente para **atendimento telefônico (PABX, Asterisk, FreeSW
   - Processamento acústico calibrado com corte passa-faixa estrito (**300Hz a 3.400Hz**), equalização de presença telefônica em 2.5kHz e compressão dinâmica de microfone headset.
   - Elimina o efeito de "voz limpa de estúdio", fazendo com que o bot soe **100% indistinguível de um atendente humano real** em chamadas celulares ou PABX analógico/GSM.
   - Pode ser ativado via tag `[telefone]...[/telefone]` ou pelo parâmetro `"telephony": true`.
-- 🌬️ **Fisiologia Vocal Orgânica (Respiração & Fillers Conversacionais)**:
-  - **Respiração Humana (`[respiracao]`)**: Inserção suave de micro-sons de inalação/respiração adequados ao gênero da voz, gerados proceduralmente ou via samples locais.
-  - **Fillers Conversacionais Anti-Silêncio**: Marcadores instantâneos (`[hum]`, `[entendi]`, `[certo]`, `[deixa-ver]`) para eliminar dead-air enquanto IAs processam prompts.
 - 🎧 **Mixer de Efeitos Sonoros (SFX) e Sons Ambiente**:
   - Tags de envelope para áudio de fundo contínuo: `[callcenter]...[/callcenter]`, `[ruido]`, `[ambiente]`.
-  - **Simulação Procedural de Digitação Humana**: O algoritmo alterna aleatoriamente entre múltiplos arquivos de teclado com rajadas orgânicas (0.35s a 0.70s) e micro-pausas naturais de reflexão (250ms a 500ms), simulando um atendente digitando em tempo real.
-  - Efeitos pontuais: `[suspiro]`, `[tosse]`, `[pigarro]`, `[risada]`.
+  - **Simulação Procedural de Digitação Humana**: O algoritmo alterna aleatoriamente entre múltiplos arquivos de teclado (`[teclado]`, `[teclado:5s]`) com rajadas orgânicas (0.35s a 0.70s) e micro-pausas naturais de reflexão (250ms a 500ms), simulando um atendente digitando em tempo real.
+  - **Fillers Conversacionais Anti-Silêncio**: Marcadores instantâneos (`[hum]`, `[entendi]`, `[certo]`, `[deixa-ver]`) para eliminar dead-air enquanto IAs processam prompts.
 - 🎛️ **Voice Studio Workstation**:
   - Interface unificada de estúdio profissional inspirada no shadcn/ui, Linear e ElevenLabs.
   - **AI Elements Persona**: Orbe animado em WebGL2 que reage em tempo real aos estados `idle` (repouso), `thinking` (geração ativa) e `speaking` (ondulação sincronizada com a reprodução de áudio).

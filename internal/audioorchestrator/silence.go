@@ -7,17 +7,27 @@ import (
 	"time"
 )
 
-// mp3SilenceFrame24kHz48kbpsMono representa um frame MPEG-2 Layer III válido de 24kHz 48kbps Mono
-// Duração de cada frame: 576 amostras / 24000 Hz = 24ms (288 bytes por frame).
-var mp3SilenceFrame24kHz48kbpsMono = func() []byte {
-	frame := make([]byte, 288)
-	// Header MPEG 2 Layer III, 48kbps, 24kHz, Mono, No CRC: 0xFF, 0xF3, 0x50, 0xC0
+// mp3SilenceFrame24kHz64kbpsMono representa um frame MPEG-2 Layer III válido de 24kHz 64kbps Mono (CapCut TTS)
+// Duração de cada frame: 576 amostras / 24000 Hz = 24ms (192 bytes por frame).
+var mp3SilenceFrame24kHz64kbpsMono = func() []byte {
+	frame := make([]byte, 192)
+	// Header MPEG 2 Layer III, 64kbps (0x8), 24kHz (0x4), Mono (0xC4), No CRC: 0xFF, 0xF3, 0x84, 0xC4
 	frame[0] = 0xFF
 	frame[1] = 0xF3
-	frame[2] = 0x50
-	frame[3] = 0xC0
-	// Side information (9 bytes) com energia zero (global_gain = 0, part2_3_length = 0)
-	// Restante preenchido com zeros (Huffman data vazio / silêncio absoluto)
+	frame[2] = 0x84
+	frame[3] = 0xC4
+	return frame
+}()
+
+// mp3SilenceFrame24kHz48kbpsMono representa um frame MPEG-2 Layer III válido de 24kHz 48kbps Mono (Edge TTS)
+// Duração de cada frame: 576 amostras / 24000 Hz = 24ms (144 bytes por frame).
+var mp3SilenceFrame24kHz48kbpsMono = func() []byte {
+	frame := make([]byte, 144)
+	// Header MPEG 2 Layer III, 48kbps (0x6), 24kHz (0x4), Mono (0xC4), No CRC: 0xFF, 0xF3, 0x64, 0xC4
+	frame[0] = 0xFF
+	frame[1] = 0xF3
+	frame[2] = 0x64
+	frame[3] = 0xC4
 	return frame
 }()
 
@@ -33,40 +43,82 @@ var mp3SilenceFrame44kHz128kbps = func() []byte {
 	return frame
 }()
 
+// StripID3 remove o cabeçalho ID3v2 de dados de áudio MP3, se presente.
+func StripID3(data []byte) []byte {
+	if len(data) >= 10 && data[0] == 'I' && data[1] == 'D' && data[2] == '3' {
+		size := int(data[6]&0x7F)<<21 | int(data[7]&0x7F)<<14 | int(data[8]&0x7F)<<7 | int(data[9]&0x7F)
+		total := 10 + size
+		if data[5]&0x10 != 0 {
+			total += 10
+		}
+		if len(data) >= total {
+			return data[total:]
+		}
+	}
+	return data
+}
+
+// isCapCutVoiceIdentifier verifica se a voz pertence ao motor CapCut
+func isCapCutVoiceIdentifier(voice string) bool {
+	vLower := strings.ToLower(strings.TrimSpace(voice))
+	return strings.HasPrefix(vLower, "dit_") ||
+		strings.HasPrefix(vLower, "icl_") ||
+		strings.HasPrefix(vLower, "bv") ||
+		strings.Contains(vLower, "bigtts") ||
+		strings.Contains(vLower, "dramaqueen") ||
+		vLower == "wenrou" ||
+		vLower == "empresario" ||
+		vLower == "luiz" ||
+		vLower == "youya" ||
+		vLower == "emotional" ||
+		vLower == "dramaaa"
+}
+
 // GenerateSilence gera um buffer de áudio com silêncio puro correspondente à duração e formato solicitados.
 func GenerateSilence(format string, duration time.Duration) ([]byte, error) {
+	return GenerateSilenceForVoice(format, "", duration)
+}
+
+// GenerateSilenceForVoice gera silêncio alinhado aos parâmetros exatos do motor de voz utilizado.
+func GenerateSilenceForVoice(format, voice string, duration time.Duration) ([]byte, error) {
 	if duration <= 0 {
 		return nil, nil
 	}
 
+	isCapCut := isCapCutVoiceIdentifier(voice)
+
 	f := strings.ToLower(strings.TrimSpace(format))
 	switch f {
 	case "mp3", "audio/mpeg":
-		return generateMP3Silence(duration), nil
+		return generateMP3Silence(duration, isCapCut), nil
 	case "wav", "audio/wav":
 		return generateWAVSilence(duration, 24000, 1, 16), nil
 	case "pcm", "raw":
 		return generatePCMSilence(duration, 24000, 1, 16), nil
 	case "opus", "ogg", "audio/opus", "audio/ogg":
-		// Para Opus/OGG ou fallback, geramos MP3 silence ou PCM de acordo com o container
-		return generateMP3Silence(duration), nil
+		return generateMP3Silence(duration, isCapCut), nil
 	default:
-		return generateMP3Silence(duration), nil
+		return generateMP3Silence(duration, isCapCut), nil
 	}
 }
 
-// generateMP3Silence gera frames MP3 de silêncio puro para a duração desejada.
-func generateMP3Silence(duration time.Duration) []byte {
+// generateMP3Silence gera frames MP3 de silêncio puro para a duração desejada com bitrate e taxa idênticos à voz.
+func generateMP3Silence(duration time.Duration, isCapCut bool) []byte {
 	frameDuration := 24 * time.Millisecond
 	numFrames := int(duration / frameDuration)
 	if numFrames <= 0 {
 		numFrames = 1
 	}
 
-	frameLen := len(mp3SilenceFrame24kHz48kbpsMono)
+	frame := mp3SilenceFrame24kHz48kbpsMono
+	if isCapCut {
+		frame = mp3SilenceFrame24kHz64kbpsMono
+	}
+
+	frameLen := len(frame)
 	buf := make([]byte, numFrames*frameLen)
 	for i := 0; i < numFrames; i++ {
-		copy(buf[i*frameLen:], mp3SilenceFrame24kHz48kbpsMono)
+		copy(buf[i*frameLen:], frame)
 	}
 	return buf
 }

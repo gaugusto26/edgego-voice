@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -42,7 +43,7 @@ type StreamMessage struct {
 
 // StreamSpeechWebSocket gerencia a conexão bidirecional WebSocket para streaming de tokens do LLM em tempo real (TTFB < 250ms).
 func (h *SpeechHandler) StreamSpeechWebSocket(w http.ResponseWriter, r *http.Request) {
-	// 1. Validação opcional de autenticação via Header ou Query Param (?token= / ?key=)
+	// 1. Validação opcional de autenticação via Header ou Query Param (?token= / ?key=) com proteção contra timing-attacks
 	if h.cfg.RequireAPIKey {
 		authHeader := r.Header.Get("Authorization")
 		token := ""
@@ -55,7 +56,7 @@ func (h *SpeechHandler) StreamSpeechWebSocket(w http.ResponseWriter, r *http.Req
 		if token == "" {
 			token = r.URL.Query().Get("key")
 		}
-		if token != h.cfg.APIKey {
+		if subtle.ConstantTimeCompare([]byte(token), []byte(h.cfg.APIKey)) != 1 {
 			http.Error(w, "Não autorizado", http.StatusUnauthorized)
 			return
 		}
@@ -67,6 +68,9 @@ func (h *SpeechHandler) StreamSpeechWebSocket(w http.ResponseWriter, r *http.Req
 		return
 	}
 	defer conn.Close()
+
+	// Limite defensivo para tamanho máximo de mensagens recebidas (1MB anti-DoS)
+	conn.SetReadLimit(1 << 20)
 
 	// Parâmetros padrão iniciais (podem vir de query params ou mensagem de config)
 	voice := r.URL.Query().Get("voice")

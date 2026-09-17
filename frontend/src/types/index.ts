@@ -3,6 +3,11 @@ export interface Persona {
   name: string;
   description: string;
   voice: string;
+  provider?: "capcut" | "edge" | string;
+  emotion?: string;
+  emotion_scale?: string;
+  style?: string;
+  role?: string;
   format: string;
   speed: number;
   pitch: string;
@@ -25,7 +30,34 @@ export interface VoiceOption {
   flag?: string;
   locale?: string;
   description: string;
+  provider?: "capcut" | "edge" | string;
+  personality?: string;
+  emotions?: string[];
+  aliases?: string[];
 }
 
 export type TabType = "personas" | "playground" | "apidocs";
+
+export interface SubtitleWord {
+  word: string;
+  start_ms: number;
+  end_ms: number;
+}
+
+export interface SubtitleCue {
+  index: number;
+  text: string;
+  start_ms: number;
+  end_ms: number;
+  words?: SubtitleWord[];
+}
+
+export interface SubtitleResult {
+  text: string;
+  duration_ms: number;
+  srt: string;
+  vtt: string;
+  sentences: SubtitleCue[];
+  words?: SubtitleWord[];
+}
 

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "deploy": "next build && xcopy /E /I /Y out ..\\web",
     "start": "next start"
   },
   "dependencies": {

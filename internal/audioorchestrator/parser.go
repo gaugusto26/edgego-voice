@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	// reTag detecta pausas, vozes, velocidade, tom, efeitos sfx, ambiente, telefone e tags de estilo
+	// reTag detecta pausas, vozes, velocidade, tom, efeitos sfx, ambiente, telefone, estilos e tags de emoção
 	reTag = regexp.MustCompile(`(?i)(?:` +
 		// 1, 2, 3: Pausas
 		`\[(?:pausa|pause|break):\s*([0-9.]+(?:ms|s)?)\]|\((?:pausa|pause|break):\s*([0-9.]+(?:ms|s)?)\)|<break\s+time=["']?([0-9.]+(?:ms|s)?)["']?\s*\/?>|` +
@@ -20,53 +20,76 @@ var (
 		// 7: Tom
 		`\[(?:tom|pitch):\s*([+-]?[0-9]+(?:hz|%)?)\]|` +
 		// 8, 9, 10, 11: SFX com Duração explícita: [som:teclado:5s] ou [teclado:5s]
-		`\[(?:som|sfx|sound):\s*([^\]:]+)(?::\s*([0-9.]+(?:ms|s)?))?\]|\[(teclado|callcenter|ruido|ruído|ambiente|suspiro|respiracao|respiração|tosse|pigarro):\s*([0-9.]+(?:ms|s)?)\]|` +
+		`\[(?:som|sfx|sound):\s*([^\]:]+)(?::\s*([0-9.]+(?:ms|s)?))?\]|\[(teclado|callcenter|ruido|ruído|ambiente):\s*([0-9.]+(?:ms|s)?)\]|` +
 		// 12: Fechamento de Telefone ou Ambiente: [/telefone], [/callcenter], [/teclado], [/ambiente], [/ruido]
 		`\[\/(telefone|callcenter|ambiente|escritorio|escritório|ruido|ruído|teclado)\]|` +
 		// 13: Abertura de Telefone ou Ambiente: [telefone], [callcenter], [ambiente], [ruido], [teclado]
 		`\[(telefone|callcenter|ambiente|escritorio|escritório|ruido|ruído|teclado)\]|` +
-		// 14, 15, 16: Abertura de Estilo [estilo:cheerful]
-		`\[(?:estilo|style):\s*([^\]]+)\]|<mstts:express-as\s+style=["']?([^"'>]+)["']?\s*(?:styledegree=["']?([0-9.]+)["']?)?\s*>|` +
-		// 17: Emoções diretas: [alegre], [triste], etc
-		`\[(alegre|cheerful|triste|sad|bravo|irritado|angry|animado|empolgado|excited|calmo|calm|gritando|shouting|amigavel|amigável|friendly|esperancoso|esperançoso|hopeful)\]|` +
-		// Fechamento de Estilo
-		`\[\/(?:estilo|style|alegre|cheerful|triste|sad|bravo|irritado|angry|animado|empolgado|excited|calmo|calm|gritando|shouting|amigavel|amigável|friendly|esperancoso|esperançoso|hopeful)\]|<\/mstts:express-as>|` +
-		// 18: Micro-expressões pontuais e fillers: [tosse], [suspiro], [respiracao], [pigarro], [risada], [hum], [entendi], [certo], [deixa-ver]
-		`\[(tosse|suspiro|respiracao(?:\s+humana)?|respiração(?:\s+humana)?|respiro|breath|pigarro|pigarreio|garganta|limpar\s+garganta|risada|risadas|risos|riso|laughter|laugh|haha|hehe|hum|hmm|entendi|certo|deixa-ver|filler:[^\]]+)\]` +
+		// 14, 15, 16: Abertura de Estilo ou Emoção [estilo:cheerful], [emocao:feliz], [emocao:firme:1.5]
+		`\[(?:estilo|style|emocao|emoção|emotion):\s*([^\]]+)\]|<mstts:express-as\s+style=["']?([^"'>]+)["']?\s*(?:styledegree=["']?([0-9.]+)["']?)?\s*>|` +
+		// 17: Emoções diretas: [alegre], [triste], [feliz], [calmo], etc
+		`\[(alegre|cheerful|triste|sad|bravo|irritado|angry|animado|empolgado|excited|calmo|calm|gritando|shouting|amigavel|amigável|friendly|esperancoso|esperançoso|hopeful|feliz|happy|serio|sério|firme|surpreso|surprise|tenso|medo|fear)\]|` +
+		// Fechamento de Estilo ou Emoção
+		`\[\/(?:estilo|style|emocao|emoção|emotion|alegre|cheerful|triste|sad|bravo|irritado|angry|animado|empolgado|excited|calmo|calm|gritando|shouting|amigavel|amigável|friendly|esperancoso|esperançoso|hopeful|feliz|happy|serio|sério|firme|surpreso|surprise|tenso|medo|fear)\]|<\/mstts:express-as>|` +
+		// 18: Fillers conversacionais: [hum], [entendi], [certo], [deixa-ver]
+		`\[(hum|hmm|entendi|certo|deixa-ver|filler:[^\]]+)\]` +
 		`)`)
 )
 
-// normalizeStyle converte apelidos e nomes em português para os estilos oficiais do Azure Speech
-func normalizeStyle(s string) string {
-	lower := strings.ToLower(strings.TrimSpace(s))
-	switch lower {
-	case "alegre", "cheerful", "happy", "feliz":
-		return "cheerful"
-	case "triste", "sad":
-		return "sad"
-	case "bravo", "irritado", "angry", "nervoso":
-		return "angry"
-	case "animado", "empolgado", "excited":
-		return "excited"
-	case "calmo", "calm", "tranquilo":
-		return "calm"
+// normalizeEmotion mapeia apelidos em português e inglês para a emoção oficial do CapCut
+// (happy, calm, angry, sad, surprise, fear, excited, neutral) e estilo do Azure/Edge TTS.
+func normalizeEmotion(raw string) (emotion string, style string, scale string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", ""
+	}
+
+	parts := strings.SplitN(raw, ":", 2)
+	name := strings.ToLower(strings.TrimSpace(parts[0]))
+	scale = "1.0"
+	if len(parts) > 1 {
+		customScale := strings.TrimSpace(parts[1])
+		if customScale != "" {
+			scale = customScale
+		}
+	}
+
+	switch name {
+	case "feliz", "happy", "alegre", "cheerful":
+		return "happy", "cheerful", scale
+	case "empolgado", "animado", "excited":
+		return "excited", "excited", scale
+	case "calmo", "calm", "suave", "tranquilo":
+		return "calm", "calm", scale
+	case "firme", "serio", "sério", "bravo", "irritado", "angry", "nervoso":
+		return "angry", "angry", scale
+	case "triste", "sad", "melancolico", "melancólico":
+		return "sad", "sad", scale
+	case "surpreso", "surpresa", "surprise":
+		return "surprise", "excited", scale
+	case "tenso", "medo", "fear":
+		return "fear", "unfriendly", scale
 	case "gritando", "shouting", "grito":
-		return "shouting"
+		return "angry", "shouting", scale
 	case "amigavel", "amigável", "friendly":
-		return "friendly"
+		return "happy", "friendly", scale
 	case "esperancoso", "esperançoso", "hopeful":
-		return "hopeful"
-	case "unfriendly", "antipatico", "seco":
-		return "unfriendly"
-	case "neutro", "neutral", "normal", "padrao", "none", "off", "":
-		return ""
+		return "happy", "hopeful", scale
+	case "neutro", "neutral", "natural", "normal", "padrao", "padrão", "none", "off":
+		return "neutral", "", "0"
 	default:
-		return lower
+		return name, name, scale
 	}
 }
 
-// buildSpeechSegment cria um bloco de fala com roteamento de provedor, trilha ambiente e filtro de telefonia.
-func buildSpeechSegment(text, voice, style, rate, pitch, ambient string, styleDegree float64, telephony bool) Segment {
+// normalizeStyle converte apelidos e nomes em português para os estilos oficiais do Azure Speech
+func normalizeStyle(s string) string {
+	_, style, _ := normalizeEmotion(s)
+	return style
+}
+
+// buildSpeechSegment cria um bloco de fala com roteamento de provedor, trilha ambiente, filtro de telefonia, estilo e emoção.
+func buildSpeechSegment(text, voice, style, emotion, emotionScale, rate, pitch, ambient string, styleDegree float64, telephony bool) Segment {
 	return Segment{
 		Type:            SegmentSpeech,
 		Provider:        ProviderEdge,
@@ -74,6 +97,8 @@ func buildSpeechSegment(text, voice, style, rate, pitch, ambient string, styleDe
 		Voice:           voice,
 		Style:           style,
 		StyleDegree:     styleDegree,
+		Emotion:         emotion,
+		EmotionScale:    emotionScale,
 		Rate:            rate,
 		Pitch:           pitch,
 		Volume:          "+0%",
@@ -92,7 +117,7 @@ func ParseSegments(text, defaultVoice, defaultRate, defaultPitch string, voiceMa
 	matches := reTag.FindAllStringSubmatchIndex(text, -1)
 	if len(matches) == 0 {
 		return []Segment{
-			buildSpeechSegment(text, defaultVoice, "", defaultRate, defaultPitch, "", 1.0, false),
+			buildSpeechSegment(text, defaultVoice, "", "", "", defaultRate, defaultPitch, "", 1.0, false),
 		}
 	}
 
@@ -102,6 +127,8 @@ func ParseSegments(text, defaultVoice, defaultRate, defaultPitch string, voiceMa
 	currPitch := defaultPitch
 	currStyle := ""
 	currStyleDegree := 1.0
+	currEmotion := ""
+	currEmotionScale := ""
 	currAmbient := ""
 	currTelephony := false
 	lastIdx := 0
@@ -113,7 +140,7 @@ func ParseSegments(text, defaultVoice, defaultRate, defaultPitch string, voiceMa
 		if startTag > lastIdx {
 			prevText := strings.TrimSpace(text[lastIdx:startTag])
 			if prevText != "" {
-				segments = append(segments, buildSpeechSegment(prevText, currVoice, currStyle, currRate, currPitch, currAmbient, currStyleDegree, currTelephony))
+				segments = append(segments, buildSpeechSegment(prevText, currVoice, currStyle, currEmotion, currEmotionScale, currRate, currPitch, currAmbient, currStyleDegree, currTelephony))
 			}
 		}
 
@@ -136,6 +163,7 @@ func ParseSegments(text, defaultVoice, defaultRate, defaultPitch string, voiceMa
 					segments = append(segments, Segment{
 						Type:         SegmentSilence,
 						Provider:     ProviderSilence,
+						Voice:        currVoice,
 						Duration:     dur,
 						AmbientTrack: currAmbient,
 					})
@@ -164,22 +192,24 @@ func ParseSegments(text, defaultVoice, defaultRate, defaultPitch string, voiceMa
 					dur = parseDuration(submatches[9])
 				}
 				segments = append(segments, Segment{
-					Type:         SegmentSFX,
-					Provider:     ProviderSFX,
-					SFXType:      sfxName,
-					Duration:     dur,
-					AmbientTrack: currAmbient,
+					Type:            SegmentSFX,
+					Provider:        ProviderSFX,
+					SFXType:         sfxName,
+					Duration:        dur,
+					AmbientTrack:    currAmbient,
+					TelephonyFilter: currTelephony,
 				})
 			} else if submatches[10] != "" {
 				// SFX com duração explícita [teclado:5s], [callcenter:3s]
 				sfxName := strings.TrimSpace(submatches[10])
 				dur := parseDuration(submatches[11])
 				segments = append(segments, Segment{
-					Type:         SegmentSFX,
-					Provider:     ProviderSFX,
-					SFXType:      sfxName,
-					Duration:     dur,
-					AmbientTrack: currAmbient,
+					Type:            SegmentSFX,
+					Provider:        ProviderSFX,
+					SFXType:         sfxName,
+					Duration:        dur,
+					AmbientTrack:    currAmbient,
+					TelephonyFilter: currTelephony,
 				})
 			} else if submatches[12] != "" {
 				// Fechamento de Telefone ou Ambiente
@@ -211,23 +241,32 @@ func ParseSegments(text, defaultVoice, defaultRate, defaultPitch string, voiceMa
 					}
 				}
 			} else if submatches[14] != "" || submatches[15] != "" {
-				// Abertura de Estilo [estilo:cheerful]
-				styleVal := strings.TrimSpace(submatches[14])
-				if styleVal == "" {
-					styleVal = strings.TrimSpace(submatches[15])
+				// Abertura de Estilo ou Emoção: [estilo:cheerful], [emocao:feliz], [emocao:firme:1.5]
+				tagVal := strings.TrimSpace(submatches[14])
+				if tagVal == "" {
+					tagVal = strings.TrimSpace(submatches[15])
 				}
-				currStyle = normalizeStyle(styleVal)
+				em, st, sc := normalizeEmotion(tagVal)
+				currEmotion = em
+				currEmotionScale = sc
+				currStyle = st
 				if len(submatches) > 16 && submatches[16] != "" {
 					if deg, err := strconv.ParseFloat(submatches[16], 64); err == nil && deg > 0 {
 						currStyleDegree = deg
+						currEmotionScale = submatches[16]
 					}
+				} else if deg, err := strconv.ParseFloat(sc, 64); err == nil && deg > 0 {
+					currStyleDegree = deg
 				}
 			} else if submatches[17] != "" {
-				// Emoção direta [alegre], [triste], etc
-				currStyle = normalizeStyle(submatches[17])
+				// Emoção direta [alegre], [triste], [feliz], [calmo], etc
+				em, st, sc := normalizeEmotion(submatches[17])
+				currEmotion = em
+				currEmotionScale = sc
+				currStyle = st
 				currStyleDegree = 1.0
 			} else if submatches[18] != "" {
-				// Micro-expressão pontual ou filler [tosse], [suspiro], [respiracao], [pigarro], [hum], [entendi]
+				// Filler conversacional [hum], [entendi], [certo], [deixa-ver]
 				segments = append(segments, Segment{
 					Type:            SegmentSFX,
 					Provider:        ProviderSFX,
@@ -236,9 +275,11 @@ func ParseSegments(text, defaultVoice, defaultRate, defaultPitch string, voiceMa
 					TelephonyFilter: currTelephony,
 				})
 			} else {
-				// Fechamento de estilo [/estilo], [/alegre]
+				// Fechamento de estilo ou emoção [/estilo], [/emocao], [/alegre], etc
 				currStyle = ""
 				currStyleDegree = 1.0
+				currEmotion = ""
+				currEmotionScale = ""
 			}
 		}
 
@@ -249,7 +290,7 @@ func ParseSegments(text, defaultVoice, defaultRate, defaultPitch string, voiceMa
 	if lastIdx < len(text) {
 		remaining := strings.TrimSpace(text[lastIdx:])
 		if remaining != "" {
-			segments = append(segments, buildSpeechSegment(remaining, currVoice, currStyle, currRate, currPitch, currAmbient, currStyleDegree, currTelephony))
+			segments = append(segments, buildSpeechSegment(remaining, currVoice, currStyle, currEmotion, currEmotionScale, currRate, currPitch, currAmbient, currStyleDegree, currTelephony))
 		}
 	}
 

@@ -47,6 +47,7 @@ func (h *PersonasHandler) GetPersonaHandler(w http.ResponseWriter, r *http.Reque
 
 // CreatePersonaHandler cria uma nova persona.
 func (h *PersonasHandler) CreatePersonaHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // Limite de 1MB anti-DoS
 	var input personas.Persona
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Payload JSON inválido: "+err.Error(), "invalid_request_error")
@@ -70,6 +71,7 @@ func (h *PersonasHandler) CreatePersonaHandler(w http.ResponseWriter, r *http.Re
 
 // UpdatePersonaHandler atualiza uma persona existente.
 func (h *PersonasHandler) UpdatePersonaHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // Limite de 1MB anti-DoS
 	id := chi.URLParam(r, "id")
 	var input personas.Persona
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -110,34 +112,126 @@ func (h *PersonasHandler) DeletePersonaHandler(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// VoiceOption representa uma voz real verificada do Microsoft Edge TTS.
+// VoiceOption representa uma voz real verificada dos motores Edge TTS ou CapCut TTS.
 type VoiceOption struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Language    string `json:"language"`
-	Gender      string `json:"gender"`
-	CountryCode string `json:"country_code"`
-	Flag        string `json:"flag"`
-	Locale      string `json:"locale"`
-	Description string `json:"description"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Language    string   `json:"language"`
+	Gender      string   `json:"gender"`
+	CountryCode string   `json:"country_code"`
+	Flag        string   `json:"flag"`
+	Locale      string   `json:"locale"`
+	Description string   `json:"description"`
+	Provider    string   `json:"provider"`              // "capcut" ou "edge"
+	Personality string   `json:"personality,omitempty"` // Personalidade e sentimentos nativos
+	Emotions    []string `json:"emotions,omitempty"`    // Emoções recomendadas
+	Aliases     []string `json:"aliases,omitempty"`     // Aliases alternativos
 }
 
-// Catálogo com 100% de vozes reais verificadas e ativas no Microsoft Edge TTS
+// Catálogo com vozes verificadas do CapCut Expressivo e Microsoft Edge Neural
 var voiceCatalog = []VoiceOption{
-	// 🇧🇷 Português (Brasil)
-	{ID: "pt-BR-ThalitaMultilingualNeural", Name: "Thalita (Multilíngue)", Language: "Português (Brasil)", Gender: "Feminino", CountryCode: "BR", Flag: "🇧🇷", Locale: "pt-BR", Description: "Voz neural fluida e natural, fala português e outros idiomas."},
-	{ID: "pt-BR-AntonioNeural", Name: "Antônio", Language: "Português (Brasil)", Gender: "Masculino", CountryCode: "BR", Flag: "🇧🇷", Locale: "pt-BR", Description: "Voz masculina madura, perfeita para suporte, vendas e notícias."},
-	{ID: "pt-BR-FranciscaNeural", Name: "Francisca", Language: "Português (Brasil)", Gender: "Feminino", CountryCode: "BR", Flag: "🇧🇷", Locale: "pt-BR", Description: "Voz clássica e calma, ideal para audiolivros e narrações."},
+	// 🎭 CapCut TTS Expressivo - Português (Brasil) com Sentimentos Nativos
+	{
+		ID:          "DiT_pt_male_wenrou",
+		Name:        "Wenrou (Carinhoso & Empático)",
+		Language:    "Português (Brasil)",
+		Gender:      "Masculino",
+		CountryCode: "BR",
+		Flag:        "🇧🇷",
+		Locale:      "pt-BR",
+		Description: "Voz suave, afetuosa e reconfortante com expressividade emocional nativa.",
+		Provider:    "capcut",
+		Personality: "Voz acolhedora e calorosa para atendimento humanizado e suporte empático.",
+		Emotions:    []string{"calm", "happy", "neutral"},
+		Aliases:     []string{"wenrou"},
+	},
+	{
+		ID:          "DiT_pt_male_shangren",
+		Name:        "Empresário Frio (Sério & Corporativo)",
+		Language:    "Português (Brasil)",
+		Gender:      "Masculino",
+		CountryCode: "BR",
+		Flag:        "🇧🇷",
+		Locale:      "pt-BR",
+		Description: "Voz executiva, séria, calculista e direta com presença de comando.",
+		Provider:    "capcut",
+		Personality: "Tom firme e racional para decisões, comunicados corporativos e finanças.",
+		Emotions:    []string{"angry", "calm", "neutral"},
+		Aliases:     []string{"empresario", "empresario-frio"},
+	},
+	{
+		ID:          "ICL_br_male_212M_LuizS",
+		Name:        "Luiz S / Contra (Locutor Dinâmico)",
+		Language:    "Português (Brasil)",
+		Gender:      "Masculino",
+		CountryCode: "BR",
+		Flag:        "🇧🇷",
+		Locale:      "pt-BR",
+		Description: "Voz forte, vibrante e dinâmica em estilo locução e comercial.",
+		Provider:    "capcut",
+		Personality: "Voz marcante e envolvente para trailers, podcasts e publicidade.",
+		Emotions:    []string{"happy", "surprise", "neutral"},
+		Aliases:     []string{"luiz", "contra"},
+	},
+	{
+		ID:          "DiT_pt_female_youya",
+		Name:        "Youya (Elegante & Serena)",
+		Language:    "Português (Brasil)",
+		Gender:      "Feminino",
+		CountryCode: "BR",
+		Flag:        "🇧🇷",
+		Locale:      "pt-BR",
+		Description: "Voz feminina refinada, aristocrática, serena e delicada.",
+		Provider:    "capcut",
+		Personality: "Voz aristocrática para concierges, spas e atendimento de luxo.",
+		Emotions:    []string{"calm", "happy", "neutral"},
+		Aliases:     []string{"youya"},
+	},
+
+	// 🎭 CapCut TTS Expressivo - Internacional (Alta Carga Emocional)
+	{
+		ID:          "en_female_emotional_moon_bigtts",
+		Name:        "Emotional (Sentimento Intenso)",
+		Language:    "Inglês (EUA)",
+		Gender:      "Feminino",
+		CountryCode: "US",
+		Flag:        "🇺🇸",
+		Locale:      "en-US",
+		Description: "Voz feminina de alta expressividade emocional e dramática.",
+		Provider:    "capcut",
+		Personality: "Carga dramática intensa para narrativas e audiolivros.",
+		Emotions:    []string{"sad", "happy", "fear"},
+		Aliases:     []string{"emotional"},
+	},
+	{
+		ID:          "en_male_dramaqueen_zachk",
+		Name:        "Dramaaa (Teatral & Expressivo)",
+		Language:    "Inglês (EUA)",
+		Gender:      "Masculino",
+		CountryCode: "US",
+		Flag:        "🇺🇸",
+		Locale:      "en-US",
+		Description: "Voz teatral, hiperbólica e bem-humorada.",
+		Provider:    "capcut",
+		Personality: "Expressividade teatral para entretenimento.",
+		Emotions:    []string{"surprise", "happy", "angry"},
+		Aliases:     []string{"dramaaa", "drama"},
+	},
+
+	// 🌐 Microsoft Edge TTS - 🇧🇷 Português (Brasil)
+	{ID: "pt-BR-ThalitaMultilingualNeural", Name: "Thalita (Multilíngue)", Language: "Português (Brasil)", Gender: "Feminino", CountryCode: "BR", Flag: "🇧🇷", Locale: "pt-BR", Description: "Voz neural fluida e natural, fala português e outros idiomas.", Provider: "edge"},
+	{ID: "pt-BR-AntonioNeural", Name: "Antônio", Language: "Português (Brasil)", Gender: "Masculino", CountryCode: "BR", Flag: "🇧🇷", Locale: "pt-BR", Description: "Voz masculina madura, perfeita para suporte, vendas e notícias.", Provider: "edge"},
+	{ID: "pt-BR-FranciscaNeural", Name: "Francisca", Language: "Português (Brasil)", Gender: "Feminino", CountryCode: "BR", Flag: "🇧🇷", Locale: "pt-BR", Description: "Voz clássica e calma, ideal para audiolivros e narrações.", Provider: "edge"},
 
 	// 🇵🇹 Português (Portugal)
-	{ID: "pt-PT-DuarteNeural", Name: "Duarte", Language: "Português (Portugal)", Gender: "Masculino", CountryCode: "PT", Flag: "🇵🇹", Locale: "pt-PT", Description: "Voz masculina em português europeu."},
-	{ID: "pt-PT-RaquelNeural", Name: "Raquel", Language: "Português (Portugal)", Gender: "Feminino", CountryCode: "PT", Flag: "🇵🇹", Locale: "pt-PT", Description: "Voz feminina em português europeu."},
+	{ID: "pt-PT-DuarteNeural", Name: "Duarte", Language: "Português (Portugal)", Gender: "Masculino", CountryCode: "PT", Flag: "🇵🇹", Locale: "pt-PT", Description: "Voz masculina em português europeu.", Provider: "edge"},
+	{ID: "pt-PT-RaquelNeural", Name: "Raquel", Language: "Português (Portugal)", Gender: "Feminino", CountryCode: "PT", Flag: "🇵🇹", Locale: "pt-PT", Description: "Voz feminina em português europeu.", Provider: "edge"},
 
 	// 🇺🇸 Inglês (Estados Unidos)
-	{ID: "en-US-AndrewMultilingualNeural", Name: "Andrew (Multilíngue)", Language: "Inglês (EUA)", Gender: "Masculino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz masculina natural e internacional."},
-	{ID: "en-US-EmmaMultilingualNeural", Name: "Emma (Multilíngue)", Language: "Inglês (EUA)", Gender: "Feminino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz feminina versátil para produtos globais."},
-	{ID: "en-US-BrianMultilingualNeural", Name: "Brian (Multilíngue)", Language: "Inglês (EUA)", Gender: "Masculino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz corporativa de alta definição."},
-	{ID: "en-US-AvaMultilingualNeural", Name: "Ava (Multilíngue)", Language: "Inglês (EUA)", Gender: "Feminino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz expressiva para assistentes de IA."},
+	{ID: "en-US-AndrewMultilingualNeural", Name: "Andrew (Multilíngue)", Language: "Inglês (EUA)", Gender: "Masculino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz masculina natural e internacional.", Provider: "edge"},
+	{ID: "en-US-EmmaMultilingualNeural", Name: "Emma (Multilíngue)", Language: "Inglês (EUA)", Gender: "Feminino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz feminina versátil para produtos globais.", Provider: "edge"},
+	{ID: "en-US-BrianMultilingualNeural", Name: "Brian (Multilíngue)", Language: "Inglês (EUA)", Gender: "Masculino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz corporativa de alta definição.", Provider: "edge"},
+	{ID: "en-US-AvaMultilingualNeural", Name: "Ava (Multilíngue)", Language: "Inglês (EUA)", Gender: "Feminino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz expressiva para assistentes de IA.", Provider: "edge"},
 	{ID: "en-US-GuyNeural", Name: "Guy", Language: "Inglês (EUA)", Gender: "Masculino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz masculina clássica americana."},
 	{ID: "en-US-JennyNeural", Name: "Jenny", Language: "Inglês (EUA)", Gender: "Feminino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz feminina padrão para assistentes."},
 	{ID: "en-US-AriaNeural", Name: "Aria", Language: "Inglês (EUA)", Gender: "Feminino", CountryCode: "US", Flag: "🇺🇸", Locale: "en-US", Description: "Voz feminina jovem e articulada."},
@@ -181,6 +275,11 @@ var voiceCatalog = []VoiceOption{
 
 // ListVoicesHandler retorna o catálogo de vozes 100% verificadas.
 func ListVoicesHandler(w http.ResponseWriter, r *http.Request) {
+	for i := range voiceCatalog {
+		if voiceCatalog[i].Provider == "" {
+			voiceCatalog[i].Provider = "edge"
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"data":  voiceCatalog,

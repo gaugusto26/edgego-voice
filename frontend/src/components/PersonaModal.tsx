@@ -51,8 +51,9 @@ export function PersonaModal({
   const [breakCommaMs, setBreakCommaMs] = useState(150);
   const [breakPeriodMs, setBreakPeriodMs] = useState(350);
   const [telephony, setTelephony] = useState(false);
-  const [autoBreath, setAutoBreath] = useState(false);
   const [sanitize, setSanitize] = useState(true);
+  const [emotion, setEmotion] = useState("");
+  const [emotionScale, setEmotionScale] = useState(1.0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isIdCustomized, setIsIdCustomized] = useState(false);
 
@@ -91,8 +92,9 @@ export function PersonaModal({
       setBreakCommaMs(parseMs(editingPersona.break_comma, 150));
       setBreakPeriodMs(parseMs(editingPersona.break_period, 350));
       setTelephony(editingPersona.telephony || false);
-      setAutoBreath(editingPersona.auto_breath || false);
       setSanitize(!editingPersona.remove_filter);
+      setEmotion(editingPersona.emotion || "");
+      setEmotionScale(editingPersona.emotion_scale ? parseFloat(editingPersona.emotion_scale) : 1.0);
       setIsIdCustomized(true);
     } else {
       setId("");
@@ -105,8 +107,9 @@ export function PersonaModal({
       setBreakCommaMs(150);
       setBreakPeriodMs(350);
       setTelephony(false);
-      setAutoBreath(false);
       setSanitize(true);
+      setEmotion("");
+      setEmotionScale(1.0);
       setIsIdCustomized(false);
     }
   }, [editingPersona, open, voices]);
@@ -133,6 +136,22 @@ export function PersonaModal({
     const formattedBreakComma = breakCommaMs > 0 ? `${breakCommaMs}ms` : "";
     const formattedBreakPeriod = breakPeriodMs > 0 ? `${breakPeriodMs}ms` : "";
 
+    const selectedVoiceObj = voices.find(
+      (v) => v.id.toLowerCase() === voice.toLowerCase() || (v.aliases && v.aliases.includes(voice.toLowerCase()))
+    );
+
+    const isCapCutVoice =
+      selectedVoiceObj?.provider === "capcut" ||
+      voice.toLowerCase().startsWith("dit_") ||
+      voice.toLowerCase().startsWith("icl_") ||
+      voice.toLowerCase().startsWith("bv") ||
+      voice.toLowerCase() === "wenrou" ||
+      voice.toLowerCase() === "empresario" ||
+      voice.toLowerCase() === "luiz" ||
+      voice.toLowerCase() === "youya" ||
+      voice.toLowerCase() === "emotional" ||
+      voice.toLowerCase() === "dramaaa";
+
     setIsSubmitting(true);
     try {
       await onSave({
@@ -140,20 +159,38 @@ export function PersonaModal({
         name: name.trim(),
         description: description.trim(),
         voice,
+        provider: selectedVoiceObj?.provider || (isCapCutVoice ? "capcut" : "edge"),
         format,
         speed,
         pitch: formattedPitch,
         break_comma: formattedBreakComma,
         break_period: formattedBreakPeriod,
         telephony,
-        auto_breath: autoBreath,
         remove_filter: !sanitize,
+        emotion: isCapCutVoice && emotion ? emotion : undefined,
+        emotion_scale: isCapCutVoice && emotion ? emotionScale.toFixed(1) : undefined,
       });
       onOpenChange(false);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const selectedVoiceObj = voices.find(
+    (v) => v.id.toLowerCase() === voice.toLowerCase() || (v.aliases && v.aliases.includes(voice.toLowerCase()))
+  );
+
+  const isCapCutVoice =
+    selectedVoiceObj?.provider === "capcut" ||
+    voice.toLowerCase().startsWith("dit_") ||
+    voice.toLowerCase().startsWith("icl_") ||
+    voice.toLowerCase().startsWith("bv") ||
+    voice.toLowerCase() === "wenrou" ||
+    voice.toLowerCase() === "empresario" ||
+    voice.toLowerCase() === "luiz" ||
+    voice.toLowerCase() === "youya" ||
+    voice.toLowerCase() === "emotional" ||
+    voice.toLowerCase() === "dramaaa";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -227,6 +264,91 @@ export function PersonaModal({
               onChange={(newVoice) => setVoice(newVoice)}
             />
           </div>
+
+          {/* Bloco Dinâmico: Sentimentos & Expressividade CapCut */}
+          {isCapCutVoice && (
+            <div className="p-3 bg-gradient-to-br from-purple-950/40 via-purple-900/10 to-background/50 rounded-xl border border-purple-500/30 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-purple-200 flex items-center gap-1.5">
+                  <IonIcon name="sparkles-outline" className="text-purple-400 text-xs" />
+                  <span>Sentimentos & Expressividade (CapCut)</span>
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-medium">
+                  Nativo ByteDance
+                </span>
+              </div>
+
+              {/* Card de Personalidade Nativa da Voz */}
+              {selectedVoiceObj?.personality && (
+                <div className="p-2 rounded-lg bg-purple-950/50 border border-purple-500/20 text-[11px] text-purple-200/90 leading-relaxed">
+                  <span className="font-semibold text-purple-300 block mb-0.5">
+                    ✨ Personalidade Nativa:
+                  </span>
+                  {selectedVoiceObj.personality}
+                </div>
+              )}
+
+              {/* Seletor de Emoção / Sentimento em Pills */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[11px] text-muted-foreground">
+                  <span>Sentimento Padrão da Persona:</span>
+                  <span className="font-mono text-purple-300 font-medium capitalize">
+                    {emotion || "Natural"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  {[
+                    { id: "", label: "Natural", icon: "😐" },
+                    { id: "calm", label: "Calmo", icon: "😌" },
+                    { id: "happy", label: "Feliz", icon: "😊" },
+                    { id: "angry", label: "Firme", icon: "😠" },
+                    { id: "sad", label: "Triste", icon: "😢" },
+                    { id: "surprise", label: "Surpreso", icon: "😲" },
+                    { id: "fear", label: "Tenso", icon: "😱" },
+                  ].map((em) => {
+                    const isSelected = emotion === em.id;
+                    return (
+                      <button
+                        key={em.id}
+                        type="button"
+                        onClick={() => setEmotion(em.id)}
+                        className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-md text-[11px] transition-all ${
+                          isSelected
+                            ? "bg-purple-500 text-white shadow-sm ring-1 ring-purple-400 font-semibold"
+                            : "bg-secondary/60 text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        }`}
+                      >
+                        <span>{em.icon}</span>
+                        <span className="truncate">{em.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Slider de Intensidade do Sentimento (Emotion Scale) */}
+              {emotion && (
+                <div className="space-y-1 pt-1 animate-in fade-in duration-150">
+                  <div className="flex justify-between text-[11px] text-muted-foreground">
+                    <span>Intensidade do Sentimento:</span>
+                    <span className="font-mono text-purple-300 font-semibold">
+                      {emotionScale.toFixed(1)}x
+                      {emotionScale <= 0.6 ? " (Sutil)" : emotionScale <= 1.2 ? " (Equilibrado)" : " (Intenso)"}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="2.0"
+                    step="0.1"
+                    value={emotionScale}
+                    onChange={(e) => setEmotionScale(parseFloat(e.target.value))}
+                    className="w-full accent-purple-500 h-1.5 bg-secondary rounded-lg cursor-pointer"
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Format & Speed */}
           <div className="grid grid-cols-2 gap-4">
@@ -379,22 +501,6 @@ export function PersonaModal({
             </Field>
           </FieldLabel>
 
-          {/* Organic Breathing Filter */}
-          <FieldLabel htmlFor="switch-breath">
-            <Field orientation="horizontal">
-              <FieldContent>
-                <FieldTitle>Micro-Respiração Orgânica</FieldTitle>
-                <FieldDescription>
-                  Injeta sons naturais de respiração humana entre parágrafos e pausas longas
-                </FieldDescription>
-              </FieldContent>
-              <Switch
-                id="switch-breath"
-                checked={autoBreath}
-                onCheckedChange={setAutoBreath}
-              />
-            </Field>
-          </FieldLabel>
 
           {/* Text Sanitizer Filter using Shadcn Field & Switch */}
           <FieldLabel htmlFor="switch-sanitize">

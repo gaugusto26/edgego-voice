@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"log/slog"
-	"math"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,11 +14,6 @@ import (
 type SFXType string
 
 const (
-	SFXThroat     SFXType = "throat"     // Pigarro
-	SFXCough      SFXType = "cough"      // Tosse
-	SFXLaughter   SFXType = "laughter"   // Risada
-	SFXSigh       SFXType = "sigh"       // Suspiro
-	SFXBreath     SFXType = "breath"     // Respiração
 	SFXKeyboard   SFXType = "keyboard"   // Efeito Teclado
 	SFXCallcenter SFXType = "callcenter" // Callcenter Ambiente
 	SFXNoise      SFXType = "noise"      // Ruído de fundo
@@ -47,16 +40,6 @@ func NormalizeSFXType(name string) (SFXType, bool) {
 	lower := strings.ToLower(strings.TrimSpace(name))
 	lower = strings.ReplaceAll(lower, " ", "_")
 	switch lower {
-	case "pigarro", "pigarreio", "throat", "limpar_garganta", "garganta":
-		return SFXThroat, true
-	case "tosse", "cough", "cof", "tosse-feminina", "tosse-masculina":
-		return SFXCough, true
-	case "risada", "risadas", "risos", "riso", "laughter", "laugh", "haha", "hehe":
-		return SFXLaughter, true
-	case "suspiro", "sigh", "ah", "suspiro-feminino", "suspiro-masculino":
-		return SFXSigh, true
-	case "respiracao", "respiração", "respiracao_humana", "respiração_humana", "respiro", "breath", "breathe", "inspira":
-		return SFXBreath, true
 	case "hum", "hmm", "filler:hmm", "filler:hum":
 		return SFXType("hum"), true
 	case "entendi", "filler:entendi":
@@ -81,40 +64,7 @@ func buildCandidateFileNames(name, voice string) []string {
 	cleanName := strings.TrimSpace(strings.ToLower(name))
 	cleanName = strings.ReplaceAll(cleanName, "_", "-")
 
-	isMale := isMaleVoice(voice)
-	genderSuffix := "-feminina"
-	genderSuffixAlt := "-feminino"
-	if isMale {
-		genderSuffix = "-masculina"
-		genderSuffixAlt = "-masculino"
-	}
-
 	var candidates []string
-
-	// Se o efeito for respiração orgânica:
-	if strings.Contains(cleanName, "respirac") || strings.Contains(cleanName, "respiraç") || strings.Contains(cleanName, "breath") || strings.Contains(cleanName, "respiro") {
-		candidates = append(candidates, "respiracao"+genderSuffix, "respiracao"+genderSuffixAlt, "respiracao", "suspiro"+genderSuffixAlt)
-	}
-
-	// Se o efeito for suspiro:
-	if strings.Contains(cleanName, "suspiro") || cleanName == "sigh" {
-		candidates = append(candidates, "suspiro"+genderSuffixAlt, "suspiro"+genderSuffix, "suspiro")
-	}
-
-	// Se o efeito for tosse:
-	if strings.Contains(cleanName, "tosse") || cleanName == "cough" {
-		candidates = append(candidates, "tosse"+genderSuffix, "tosse"+genderSuffixAlt, "tosse")
-	}
-
-	// Se o efeito for pigarro:
-	if strings.Contains(cleanName, "pigarro") || strings.Contains(cleanName, "throat") || strings.Contains(cleanName, "garganta") {
-		candidates = append(candidates, "pigarro"+genderSuffixAlt, "pigarro"+genderSuffix, "pigarro")
-	}
-
-	// Se o efeito for risada ou risos:
-	if strings.Contains(cleanName, "ris") || strings.Contains(cleanName, "laugh") || strings.Contains(cleanName, "haha") || strings.Contains(cleanName, "hehe") {
-		candidates = append(candidates, "risada"+genderSuffix, "risada"+genderSuffixAlt, "risada", "risos"+genderSuffix, "risos"+genderSuffixAlt, "risos")
-	}
 
 	// Se o efeito for teclado:
 	if strings.Contains(cleanName, "teclado") || cleanName == "digitando" || cleanName == "keyboard" {
@@ -228,82 +178,12 @@ func GetAudioForSFX(sfxName, voice, format string) ([]byte, error) {
 	return GenerateAcousticSFX(sfxType, format)
 }
 
-// GenerateAcousticSFX gera um bloco de áudio acústico puro (sem fala) no formato solicitado.
+// GenerateAcousticSFX gera um bloco de áudio de silêncio acústico puro no formato solicitado.
 func GenerateAcousticSFX(sfxType SFXType, format string) ([]byte, error) {
 	sampleRate := 24000
-	var pcm []int16
-
-	r := rand.New(rand.NewSource(1337))
-
-	switch sfxType {
-	case SFXThroat:
-		duration := 0.35
-		totalSamples := int(float64(sampleRate) * duration)
-		pcm = make([]int16, totalSamples)
-		for i := 0; i < totalSamples; i++ {
-			t := float64(i) / float64(sampleRate)
-			env := math.Exp(-math.Pow((t-0.08)/0.035, 2)) + 0.8*math.Exp(-math.Pow((t-0.22)/0.045, 2))
-			noise := (r.Float64()*2.0 - 1.0)
-			tone := math.Sin(2*math.Pi*260*t) + 0.4*math.Sin(2*math.Pi*520*t)
-			val := (noise*0.65 + tone*0.35) * env * 14000
-			pcm[i] = int16(math.Max(-32768, math.Min(32767, val)))
-		}
-
-	case SFXCough:
-		duration := 0.35
-		totalSamples := int(float64(sampleRate) * duration)
-		pcm = make([]int16, totalSamples)
-		for i := 0; i < totalSamples; i++ {
-			t := float64(i) / float64(sampleRate)
-			env := math.Exp(-t * 10.0)
-			noise := (r.Float64()*2.0 - 1.0)
-			tone := math.Sin(2*math.Pi*320*t) + 0.3*math.Sin(2*math.Pi*580*t)
-			val := (noise*0.75 + tone*0.25) * env * 13000
-			pcm[i] = int16(math.Max(-32768, math.Min(32767, val)))
-		}
-
-	case SFXSigh:
-		duration := 0.45
-		totalSamples := int(float64(sampleRate) * duration)
-		pcm = make([]int16, totalSamples)
-		for i := 0; i < totalSamples; i++ {
-			t := float64(i) / float64(sampleRate)
-			env := math.Sin(math.Pi * t / duration)
-			noise := (r.Float64()*2.0 - 1.0)
-			val := noise * env * 6500
-			pcm[i] = int16(math.Max(-32768, math.Min(32767, val)))
-		}
-
-	case SFXLaughter:
-		duration := 0.75
-		totalSamples := int(float64(sampleRate) * duration)
-		pcm = make([]int16, totalSamples)
-		for i := 0; i < totalSamples; i++ {
-			t := float64(i) / float64(sampleRate)
-			env := math.Exp(-math.Pow((t-0.10)/0.05, 2)) + 0.75*math.Exp(-math.Pow((t-0.32)/0.06, 2)) + 0.50*math.Exp(-math.Pow((t-0.54)/0.06, 2))
-			tone := math.Sin(2*math.Pi*420*t) + 0.35*math.Sin(2*math.Pi*840*t)
-			noise := (r.Float64()*2.0 - 1.0)
-			val := (tone*0.75 + noise*0.25) * env * 16000
-			pcm[i] = int16(math.Max(-32768, math.Min(32767, val)))
-		}
-
-	case SFXBreath:
-		duration := 0.55
-		totalSamples := int(float64(sampleRate) * duration)
-		pcm = make([]int16, totalSamples)
-		for i := 0; i < totalSamples; i++ {
-			t := float64(i) / float64(sampleRate)
-			env := math.Exp(-math.Pow((t-0.32)/0.18, 2))
-			noise := (r.Float64()*2.0 - 1.0)
-			val := noise * env * 8000
-			pcm[i] = int16(math.Max(-32768, math.Min(32767, val)))
-		}
-
-	default:
-		duration := 0.25
-		totalSamples := int(float64(sampleRate) * duration)
-		pcm = make([]int16, totalSamples)
-	}
+	duration := 0.25
+	totalSamples := int(float64(sampleRate) * duration)
+	pcm := make([]int16, totalSamples)
 
 	wavBytes, err := encodeWAV(pcm, sampleRate)
 	if err != nil {

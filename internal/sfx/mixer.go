@@ -56,8 +56,8 @@ func GetAudioParams(format string) []string {
 	case strings.Contains(lower, "aac"):
 		return []string{"-ar", "24000", "-ac", "1", "-b:a", "48k", "-c:a", "aac", "-f", "adts"}
 	default:
-		// Padrão exato do Edge TTS: audio-24khz-48kbitrate-mono-mp3
-		return []string{"-ar", "24000", "-ac", "1", "-b:a", "48k", "-c:a", "libmp3lame", "-f", "mp3"}
+		// Padrão exato: audio-24khz-mono-mp3 sem headers de container que corrompem concatenação
+		return []string{"-ar", "24000", "-ac", "1", "-b:a", "64k", "-c:a", "libmp3lame", "-write_xing", "0", "-id3v2_version", "0", "-f", "mp3"}
 	}
 }
 

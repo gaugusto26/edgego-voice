@@ -12,10 +12,12 @@ import (
 	"time"
 
 	"edgego-voice/internal/audiocache"
+	"edgego-voice/internal/capcuttts"
 	"edgego-voice/internal/config"
 	"edgego-voice/internal/edgetts"
 	"edgego-voice/internal/personas"
 	"edgego-voice/internal/server"
+	"edgego-voice/internal/tts"
 )
 
 func main() {
@@ -33,21 +35,27 @@ func main() {
 		})))
 	}
 
-	// 3. Inicializar Componentes de Negócio, Clientes TTS & Cache LRU
+	// 3. Inicializar Componentes de Negócio, Clientes TTS & Cache SLRU
 	voiceManager := edgetts.NewVoiceManager("voices.json")
 	personasManager := personas.NewManager("personas.json")
-	ttsClient := edgetts.NewClient(cfg.Proxy)
+	edgeClient := edgetts.NewClient(cfg.Proxy)
+	capcutClient := capcuttts.NewClient(cfg.Proxy)
+	multiEngine := tts.NewMultiEngineClient(edgeClient, capcutClient)
 	audioCache := audiocache.NewCache(cfg.CacheEnabled, cfg.CacheMaxMB, cfg.CacheTTL)
 
 	// 4. Montar Roteador e Servidor HTTP
-	router := server.SetupRouter(cfg, ttsClient, voiceManager, personasManager, audioCache)
+	router := server.SetupRouter(cfg, multiEngine, voiceManager, personasManager, audioCache)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           router,
 		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// WriteTimeout precisa ser generoso para sínteses multi-segmento com SFX.
+		// Com semáforo de 2 sínteses paralelas, o pior caso é:
+		//   N segmentos × ~10s por segmento (Edge TTS) = até ~30s para casos complexos.
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	// 5. Exibir Banner de Inicialização
@@ -57,8 +65,9 @@ func main() {
 	fmt.Println("🐹 Linguagem: Go (Golang) - Alta Performance e Baixa Latência")
 	fmt.Println("⚙️  Servidor: Go net/http + Chi Router (Streaming)")
 	fmt.Println("🎭 Módulo de Personas: Ativo (CRUD & API dedicadas)")
-	fmt.Printf("🧠 Cache de Áudio LRU: %v (Max: %d MB)\n", cfg.CacheEnabled, cfg.CacheMaxMB)
-	fmt.Println("🟢 Motor de Áudio: Edge TTS + SFX Mixer (100% Gratuito / Zero Tokens)")
+	fmt.Printf("🧠 Cache de Áudio SLRU: %v (Max: %d MB)\n", cfg.CacheEnabled, cfg.CacheMaxMB)
+	fmt.Println("🟢 Motores de Áudio: Edge TTS + CapCut Expressivo (ByteDance Sami TTS)")
+	fmt.Println("✨ Sentimentos Nativos: Wenrou (Suave), Empresário Frio, Luiz S, Youya")
 	fmt.Printf("🌐 Servidor / Painel Web: http://%s\n", addr)
 	fmt.Printf("🔑 Exigir chave de API: %v\n", cfg.RequireAPIKey)
 	fmt.Printf("🎤 Voz Padrão: %s\n", cfg.DefaultVoice)

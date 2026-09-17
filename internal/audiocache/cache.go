@@ -113,8 +113,13 @@ func GenerateKey(text, voice, format string, speed float64, pitch string, remove
 }
 
 // GenerateKeyWithOptions gera um hash SHA256 único incluindo opções avançadas como filtro de telefonia e respiração.
-// Otimizado com buffer pool para eliminar alocações de memória na rota crítica (golang-performance).
 func GenerateKeyWithOptions(text, voice, format string, speed float64, pitch string, removeFilter, telephony, autoBreath bool) string {
+	return GenerateKeyWithEmotions(text, voice, format, speed, pitch, removeFilter, telephony, autoBreath, "", "", "")
+}
+
+// GenerateKeyWithEmotions gera um hash SHA256 único incluindo opções avançadas, sentimentos e expressividade.
+// Otimizado com buffer pool para eliminar alocações de memória na rota crítica (golang-performance).
+func GenerateKeyWithEmotions(text, voice, format string, speed float64, pitch string, removeFilter, telephony, autoBreath bool, emotion, emotionScale, style string) string {
 	buf := bufferPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufferPool.Put(buf)
@@ -135,6 +140,16 @@ func GenerateKeyWithOptions(text, voice, format string, speed float64, pitch str
 	}
 	if autoBreath {
 		buf.WriteString("|breath:true")
+	}
+	if emotion != "" {
+		buf.WriteString("|emo:")
+		buf.WriteString(emotion)
+		buf.WriteString(":")
+		buf.WriteString(emotionScale)
+	}
+	if style != "" {
+		buf.WriteString("|style:")
+		buf.WriteString(style)
 	}
 
 	hash := sha256.Sum256(buf.Bytes())

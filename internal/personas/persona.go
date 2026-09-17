@@ -23,7 +23,12 @@ type Persona struct {
 	ID           string    `json:"id"`                     // Slug único (ex: "atendimento-whatsapp")
 	Name         string    `json:"name"`                   // Nome legível (ex: "Atendimento WhatsApp")
 	Description  string    `json:"description"`            // Descrição da finalidade
-	Voice        string    `json:"voice"`                  // Voz neural (ex: "pt-BR-ThalitaMultilingualNeural")
+	Voice        string    `json:"voice"`                  // Voz neural (ex: "pt-BR-ThalitaMultilingualNeural" ou "DiT_pt_male_wenrou")
+	Provider     string    `json:"provider,omitempty"`     // Provedor ("edge" ou "capcut")
+	Emotion      string    `json:"emotion,omitempty"`      // Emoção/sentimento (happy, calm, sad, angry, etc.)
+	EmotionScale string    `json:"emotion_scale,omitempty"` // Intensidade da emoção ("0" a "2.0")
+	Style        string    `json:"style,omitempty"`        // Estilo de fala
+	Role         string    `json:"role,omitempty"`         // Papel interpretado
 	Format       string    `json:"format"`                 // Formato (mp3, opus, wav, etc.)
 	Speed        float64   `json:"speed"`                  // Multiplicador de velocidade (0.25 a 2.0)
 	Pitch        string    `json:"pitch"`                  // Ajuste de tom (ex: "+0Hz", "+5Hz", "-10Hz")
@@ -150,8 +155,14 @@ func (m *Manager) save() error {
 		return fmt.Errorf("falha ao serializar personas: %w", err)
 	}
 
-	if err := os.WriteFile(m.filePath, data, 0644); err != nil {
-		return fmt.Errorf("falha ao salvar personas.json: %w", err)
+	tmpFile := m.filePath + ".tmp"
+	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
+		return fmt.Errorf("falha ao escrever arquivo temporário de personas: %w", err)
+	}
+
+	if err := os.Rename(tmpFile, m.filePath); err != nil {
+		_ = os.Remove(tmpFile)
+		return fmt.Errorf("falha ao atualizar atomicamente personas.json: %w", err)
 	}
 
 	return nil

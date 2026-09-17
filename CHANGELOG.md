@@ -4,63 +4,80 @@ Todas as mudanças notáveis no projeto **EdgeGo Voice** são documentadas neste
 
 O formato é baseado no [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) e adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
----
-
-## [Não Lançado] (Unreleased)
+## [1.2.0] - 2026-09-16
 
 ### ✨ Adicionado
+- **Geração e Extração Completa de Legendas (`internal/subtitles`):**
+  - Suporte a múltiplos formatos de legenda de mercado: **SubRip (`.srt`)**, **WebVTT (`.vtt`)** e **JSON Estruturado** com timestamps em milissegundos por palavra e sentença.
+  - Formatação com alocação zero de memória usando `strings.Builder` e pré-cálculo de capacidade (`golang-performance`).
+  - Algoritmo de fallback inteligente com divisão por fronteiras de sentença e interpolação ponderada de caracteres/palavras.
+  - Orquestração com acumulação cronológica de offsets (`accumulatedOffsetMs`) para sincronizar legendas em áudios compostos com pausas (`[pausa: ...]`), efeitos SFX (`[teclado: ...]`) e blocos de ambiente (`[callcenter]`).
+- **Novas Rotas de Legendas na API REST:**
+  - `POST /v1/audio/subtitles`: Gera diretamente legendas no formato solicitado (`srt`, `vtt` ou `json`).
+  - `POST /v1/persona/{id}/subtitles`: Geração de legendas personalizada para Personas salvas.
+  - Suporte ao parâmetro `with_subtitles: true` ou `response_format: "verbose_json"` na rota padrão `POST /v1/audio/speech`, retornando o áudio em base64 junto com metadados e estrutura completa de legendas.
+  - Cabeçalho HTTP `X-Subtitles-Duration-Ms` exposto em todas as respostas de síntese.
+- **Player com Karaokê em Tempo Real & Central de Exportação no Frontend:**
+  - **Live Karaoke Banner:** Frase ativa destacada em tempo real com indicador de tempo e sincronização com `audioRef.currentTime`.
+  - **Navegação Interativa por Sentenças:** Lista de frases clicáveis que permite ao usuário pular diretamente para qualquer ponto do áudio.
+  - **Exportação Multiformato:** Botões para download do áudio original, arquivo `.srt`, arquivo `.vtt` e cópia da estrutura JSON com 1 clique.
+
+### 🔒 Segurança & Higienização de Erros
+- **Prevenção de Vazamento de Informações de Infraestrutura (CWE-209):**
+  - Removidas referências a nomes de firewalls corporativos, regras de bloqueio de rede, URLs de CDN com tokens de autenticação assinados e nomes de arquivos internos (`.env`) de todas as mensagens de erro retornadas pela API e pelos logs do servidor.
+  - O servidor agora responde com mensagens genéricas e seguras ao cliente (`502 Bad Gateway` com descrição padronizada), mantendo detalhes técnicos apenas em logs internos protegidos.
+  - No Frontend (`PlaygroundView`), adicionada a função `sanitizeErrorMessage` que intercepta e mascara qualquer detalhe técnico residual antes de exibir alertas na interface, além de eliminar saídas inseguras no console do navegador (`console.error`).
+
+---
+
+## [1.1.0] - 2026-09-16
+
+### ✨ Adicionado
+- **Integração Nativa com o Motor CapCut / ByteDance Sami TTS (`internal/capcuttts`):**
+  - Síntese de voz com modelos neurais ultra-realistas com suporte a emoções em português (`wenrou`, `empresario`, `luiz`, `youya`) e inglês (`emotional`).
+  - Suporte a expressividade dinâmica inline via tags `[emocao:feliz]texto[/emocao]`, `[feliz]`, `[calmo]`, `[firme]`, `[triste]`, etc., mapeadas diretamente para as APIs dos motores CapCut e Edge TTS.
+  - Seletor de Sentimentos no Voice Studio ativado dinamicamente e com exclusividade para modelos compatíveis com emoções (CapCut).
+  - Suporte a Proxy HTTP/HTTPS via variável de ambiente `PROXY=` no `.env` para contornar restrições de rede no motor CapCut.
 - **Streaming Bidirecional WebSocket para LLMs (`GET /v1/audio/stream`):**
-  - **Ultra-Baixa Latência Conversacional (TTFB < 250ms):** Permite que agentes de IA (n8n, Dify, Typebot, Python) enviem tokens textuais de LLM conforme são gerados; o EdgeGo sintetiza e transmite frames binários de áudio sentença a sentença.
-  - **Tag-Aware Sentence Chunker (`internal/audioorchestrator`):** Máquina de estados finitos que divide fluxos de tokens em sentenças sem jamais fragmentar tags (`[teclado:2s]`, `[pausa: 500ms]`) ou interromper envelopes de ambiente (`[callcenter]`) e linha telefônica (`[telefone]`).
-  - **Suporte a Hijacker e Flusher:** Middleware Go atualizado com suporte completo a conexões WebSocket persistentes e streaming chunked de alta vazão.
-- **Persistência Completa de Realismo Telefônico e Respiração nas Personas:**
-  - Suporte aos campos `telephony` e `auto_breath` na struct `Persona`, serialização em `personas.json`, formulário `PersonaModal.tsx` e herança automática nas rotas `/v1/persona/{id}/speech` e no Voice Studio.
+  - **Ultra-Baixa Latência Conversacional (TTFB < 250ms):** Permite que agentes de IA (n8n, Dify, Typebot, Python) enviem fluxos de tokens de LLM e recebam chunks de áudio sentença a sentença.
+  - **Tag-Aware Sentence Chunker (`internal/audioorchestrator`):** Máquina de estados que divide fluxos de tokens em sentenças sem jamais fragmentar tags (`[teclado:2s]`, `[pausa: 500ms]`) ou interromper envelopes de ambiente (`[callcenter]`) e linha telefônica (`[telefone]`).
 - **Filtro Acústico DSP de Linha Telefônica & PABX (`[telefone]...[/telefone]`):**
-  - **Cadeia de Processamento em Go + FFmpeg:** Filtro passa-faixa estrito (300Hz a 3.400Hz), equalização de presença telefônica em 2.5kHz e compressão dinâmica para nivelamento de microfone headset.
-  - **Eliminação do Efeito "Voz Limpa de Estúdio":** Faz com que o áudio sintetizado soe idêntico a um atendente humano real falando por um canal telefônico PSTN/GSM, ideal para PABX e robôs de atendimento.
-  - **Suporte a Tag e Parâmetro REST:** Pode ser ativado via tag envolvente `[telefone]...[/telefone]` ou via parâmetro JSON `"telephony": true`.
-- **Fisiologia Vocal Orgânica Completa (Respiração, Pigarro, Risadas, Risos e Fillers):**
-  - **Novos Efeitos em Disco & Síntese Acústica:** Adicionados arquivos de alta fidelidade e modelos paramétricos para `[pigarro]` (limpeza de garganta com fricção glotal), `[risada]` e `[risos]` (gargalhada e risos leves ritmados) e `[respiracao]` / `[respiracao humana]` (inalação suave pré-fala), direcionados para vozes femininas e masculinas.
-  - **Transcodificação Transparente para MP3 24kHz Mono 48kbps:** O mixer agora converte automaticamente qualquer WAV customizado em disco para o mesmo formato de streaming do Edge TTS via FFmpeg, eliminando cliques, cortes ou problemas de decodificação no navegador.
-  - **Fillers Conversacionais Anti-Silêncio:** Suporte a marcadores instantâneos como `[hum]`, `[entendi]`, `[certo]` e `[deixa-ver]` para eliminar silêncios mortos em aplicações conversacionais de IA.
-  - **Suporte no Voice Studio:** Novos botões para `[risada]` e `[risos]`, detecção correta de tags pontuais nos badges de texto e presets no toolbar.
-- **Cache de Alta Performance Sharded Segmented-LRU (SLRU) & Deduplicação (`internal/audiocache`):**
-  - **Particionamento em 16 Shards:** Distribuição com hash FNV-1a para eliminar a contenção de mutexes entre leituras concorrentes em processadores multi-core.
-  - **Segmented LRU (Proteção contra Scan Pollution):** Duas filas internas (Probatória 25% e Protegida 75%) que garantem que saudações e respostas telefônicas frequentes nunca sejam expulsas por textos longos ocasionais.
-  - **Deduplicação Concorrente com `Singleflight`:** Agrupamento de requisições idênticas em andamento; múltiplas chamadas simultâneas compartilham a mesma síntese sem gerar conexões ou buffers duplicados.
-  - **Geração de Chaves Zero-Alloc:** Pool de buffers (`sync.Pool`) para reaproveitamento de memória na criação de hashes SHA-256.
-  - **Bateria Oficial de Benchmarks:** Adição de testes de performance (`BenchmarkCacheGet`, `BenchmarkCacheGetMiss`, `BenchmarkCacheSet`, `BenchmarkCacheMixed90Read10Write`, `BenchmarkSingleflight`, `BenchmarkGenerateKey`) comprovando leitura em **176.8 ns** e **0 alocações/op**.
+  - Processamento passa-faixa (300Hz–3.400Hz), equalização de presença telefônica e compressão dinâmica para simular com perfeição canais telefônicos PSTN/GSM.
+- **Simulação Procedural de Digitação Humana via Teclado (`internal/sfx`):**
+  - Alternância orgânica entre gravações de teclas com rajadas (0.35s a 0.70s) e pausas de reflexão (250ms a 500ms) sob a tag `[teclado:Xs]`.
+- **Cache Sharded Segmented-LRU (SLRU) & Deduplicação Concorrente (`internal/audiocache`):**
+  - 16 shards com hash FNV-1a para eliminar contenção entre núcleos de CPU, proteção contra *scan pollution* e `singleflight` para evitar requisições idênticas simultâneas.
 - **Voice Studio Workstation (Redesign Completo do Playground):**
-  - **Layout de Estúdio Unificado:** Reformulação da interface em formato de estação de trabalho profissional (Canvas Central de Criação + Inspetor Lateral de Voz e Parâmetros), eliminando caixas vazias e múltiplos cards desconexos.
-  - **Componente Oficial AI Elements Persona (`@rive-app/react-webgl2`):** Orbe animado em WebGL2 integrado organicamente no topo do Inspetor, reagindo em tempo real aos estados `idle` (respiração fluida), `thinking` (rotação ativa durante a geração) e `speaking` (ondulação sincronizada com o player de áudio).
-  - **Player de Áudio Acoplado:** O Waveform Player surge suavemente diretamente abaixo do botão de ação, proporcionando feedback sonoro imediato no fluxo de criação.
-  - **Atalho de Teclado:** Suporte a `Ctrl + Enter` (ou `Cmd + Enter`) para disparar a síntese de áudio instantaneamente.
-  - **Design Minimalista com Ionicons:** Substituição de 100% dos emojis da barra de ferramentas e menus por Ionicons monocromáticos de traço limpo, alinhados à estética do **shadcn/ui**, Linear e ElevenLabs.
-- **Motor de Efeitos Sonoros Acústicos e Sons Ambiente (`internal/sfx`):**
-  - **Trilhas de Ambiente Contínuas:** Mixagem de fundo transparente com atenuação calibrada (ganho 0.45) via tags de envelope (ex: `[callcenter]...[/callcenter]`, `[ruido]`, `[ambiente]`).
-  - **Simulação Procedural de Digitação Humana:** Algoritmo orgânico que alterna entre múltiplos arquivos de teclado (`teclado-to-spech.wav`, `teclado-to-spech2.wav`, `efeito-teclado.wav`), intercalando rajadas de teclas (0.35s a 0.70s) com micro-pausas naturais de reflexão (250ms a 500ms).
-  - **Camadas Simultâneas:** Continuidade do áudio ambiente por baixo de pausas reais e durante a execução de efeitos sonoros.
-  - **Alinhamento Rigoroso de Amostragem (24kHz Mono 48kbps):** Padronização exata de clock e taxa de bits com o Edge TTS para evitar saltos ou distorções de duração na reprodução dos navegadores.
-- **Controles de Pausas Naturais (SSML) no Inspetor:**
-  - Controles deslizantes dedicados para pausas em vírgulas (`break_comma`: 0 a 800ms) e pontos finais (`break_period`: 0 a 1200ms) com badge indicativo de custo zero ($0).
-- **Orquestrador de Silêncio Real e Concatenação em Go (`internal/audioorchestrator`):**
-  - **Geração de Silêncio Puro:** Criação de frames válidos de silêncio absoluto em Go para MP3, WAV e PCM com precisão em milissegundos (ex: `[pausa: 2s]`, `[pausa: 500ms]`).
-  - **Suporte a Diálogos e Multi-Vozes:** Troca dinâmica de personagens no meio do texto com a tag `[voz: Nome]`.
-  - **Síntese Concorrente Paralela:** Processamento concorrente de múltiplos blocos de áudio via goroutines (`golang-concurrency`) e concatenação em buffer pré-alocado (`golang-performance`).
-- **Orquestrador SSML Visual & Injetor de Prosódia:**
-  - **Ajuste Fino de Tom (Pitch):** Controle deslizante de afinação de frequência (`-20Hz` a `+20Hz`) integrado ao formulário de Personas e ao Voice Studio.
-  - **Sanitizador e Parser SSML Inteligente:** Conversão de tags de pausas e formatação em cadências suportadas pelo motor nativo.
-- **Suporte a Multi-idiomas (i18n):** Seletor de idioma integrado no painel com suporte a Português (Brasil), Inglês (EUA) e Espanhol (Espanha).
+  - Layout unificado de estúdio profissional, componente interativo AI Elements Persona em WebGL2 (@rive-app), waveform acoplado e visual minimalista.
+
+### 🔄 Modificado
+- **Sanitização Inteligente de Tags de Expressividade:**
+  - O parser agora extrai as emoções das tags entre colchetes (`[feliz]`, `[emocao:calmo]`, etc.) e higieniza o texto falado, garantindo que o sintetizador aplique o estilo vocal sem jamais ler os colchetes em voz alta.
+- **Persistência Atômica de Personas (`personas.json`):**
+  - Implementada gravação em arquivo temporário com `os.Rename` atômico e permissões restritas `0600`, prevenindo corrupção de dados em caso de queda de energia.
+
+### 🐛 Corrigido
+- **Correção de Resposta HTTP 200 Prematura na Síntese:**
+  - Corrigido fluxo em `handler_speech.go` onde o cabeçalho `200 OK` era enviado antes do término da síntese, gerando áudios vazios de 0 bytes e mascarando falhas no player. O servidor agora só confirma o status `200` após o áudio estar pronto, retornando `HTTP 502 Bad Gateway` com JSON descritivo em caso de erro.
+- **Diagnóstico Transparente de Bloqueios de Firewall de Rede:**
+  - Detecção proativa de interceptações de firewall corporativo (ex: FortiGate Application Control) no download do CDN ByteDance (`*.tiktokcdn.com`), alertando o usuário com instruções claras de configuração de Proxy.
 
 ### 🗑️ Removido
-- **Integração com Microsoft Azure Speech API:**
-  - Excluído o pacote `internal/azuretts/` (`client.go` e `client_test.go`).
-  - Removidas as variáveis de ambiente `AZURE_SPEECH_KEY` e `AZURE_SPEECH_REGION` de `config.go`, `docker-compose.yml` e `.env.example`.
-  - Eliminado rastreamento de custos em dólar, estimativas financeiras e tokens pagos, operando exclusivamente em modo **100% Go Nativo Gratuito ($0.00)**.
-  - Removido cabeçalho flutuante redundante `PersonaHeroCard.tsx`.
+- **Eliminação Completa do Módulo de Micro-Expressões Legadas:**
+  - Removidos áudios e dependências de micro-expressões vocais legadas (`[pigarro]`, `[risos]`, fillers), simplificando a arquitetura em favor de pausas naturais com silêncio puro (`[pausa: 500ms]`) e digitação procedural humana via teclado.
+- **Integração Legada com Microsoft Azure Speech API:**
+  - Removido pacote `internal/azuretts/`, chaves de API pagas e medidores de custo em dólar, operando 100% em modo nativo Go gratuito ($0.00).
 - **Página e Menu de Métricas & Consumo:**
-  - Removida a aba de navegação "Métricas" na barra superior (`Navbar.tsx`).
-  - Excluída a tela de visualização de métricas (`AnalyticsView.tsx`) e limpos os tipos associados (`RequestLogItem`, `TimeBucket`, `UsageStats`), deixando a navegação focada em Personas, Voice Studio e Documentação da API.
+  - Removida a aba de navegação e componentes não utilizados, deixando o painel focado em Personas, Voice Studio e Documentação.
+
+### 🔒 Segurança
+- **Proteção Contra Timing Attacks (Ataques de Tempo):**
+  - Validação de chaves de API globais e por Persona refatorada para comparação em tempo constante usando `crypto/subtle.ConstantTimeCompare`.
+- **Mitigação de Negação de Serviço (Anti-DoS):**
+  - Limitação estrita de leitura de payload HTTP com `http.MaxBytesReader` em endpoints de síntese (2MB) e gerenciamento de personas (1MB).
+  - Limite de leitura defensivo configurado para conexões WebSocket com `conn.SetReadLimit(1 << 20)`.
+- **Cabeçalhos de Segurança Defensivos (OWASP):**
+  - Ativação do middleware `SecurityHeadersMiddleware` injetando `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection: 1; mode=block` e `Referrer-Policy: strict-origin-when-cross-origin`.
 
 ---
 

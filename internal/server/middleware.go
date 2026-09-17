@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -30,7 +31,18 @@ func writeJSONError(w http.ResponseWriter, statusCode int, message, errType stri
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// AuthMiddleware valida o cabeçalho Authorization: Bearer <API_KEY>.
+// SecurityHeadersMiddleware adiciona cabeçalhos defensivos essenciais recomendados pela OWASP.
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// AuthMiddleware valida o cabeçalho Authorization: Bearer <API_KEY> com proteção contra timing-attacks.
 func AuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +64,7 @@ func AuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 			}
 
 			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if token != cfg.APIKey {
+			if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.APIKey)) != 1 {
 				writeJSONError(w, http.StatusUnauthorized, "Chave de API inválida.", "authentication_error")
 				return
 			}

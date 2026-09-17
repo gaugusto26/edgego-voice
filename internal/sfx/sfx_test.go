@@ -10,10 +10,6 @@ func TestNormalizeSFXType(t *testing.T) {
 		expected SFXType
 		valid    bool
 	}{
-		{"respiracao", SFXBreath, true},
-		{"respiração", SFXBreath, true},
-		{"respiro", SFXBreath, true},
-		{"breath", SFXBreath, true},
 		{"hum", SFXType("hum"), true},
 		{"hmm", SFXType("hum"), true},
 		{"filler:hmm", SFXType("hum"), true},
@@ -22,8 +18,7 @@ func TestNormalizeSFXType(t *testing.T) {
 		{"deixa-ver", SFXType("deixa-ver"), true},
 		{"callcenter", SFXCallcenter, true},
 		{"teclado", SFXKeyboard, true},
-		{"tosse", SFXCough, true},
-		{"suspiro", SFXSigh, true},
+		{"digitando", SFXKeyboard, true},
 		{"ruido", SFXNoise, true},
 		{"desconhecido", SFXType("desconhecido"), false},
 	}
@@ -40,30 +35,17 @@ func TestNormalizeSFXType(t *testing.T) {
 }
 
 func TestBuildCandidateFileNames(t *testing.T) {
-	// 1. Respiração com voz feminina
-	femaleCandidates := buildCandidateFileNames("respiracao", "pt-BR-FranciscaNeural")
-	foundFem := false
-	for _, c := range femaleCandidates {
-		if c == "suspiro-feminino" || c == "suspiro-feminina" {
-			foundFem = true
+	// 1. Teclado
+	keyboardCandidates := buildCandidateFileNames("teclado", "pt-BR-FranciscaNeural")
+	foundKeyboard := false
+	for _, c := range keyboardCandidates {
+		if c == "efeito-teclado" || c == "teclado" {
+			foundKeyboard = true
 			break
 		}
 	}
-	if !foundFem {
-		t.Errorf("Esperava encontrar candidato feminino para respiração, obteve: %+v", femaleCandidates)
-	}
-
-	// 2. Respiração com voz masculina
-	maleCandidates := buildCandidateFileNames("respiracao", "pt-BR-AntonioNeural")
-	foundMasc := false
-	for _, c := range maleCandidates {
-		if c == "suspiro-masculino" || c == "suspiro-masculina" {
-			foundMasc = true
-			break
-		}
-	}
-	if !foundMasc {
-		t.Errorf("Esperava encontrar candidato masculino para respiração, obteve: %+v", maleCandidates)
+	if !foundKeyboard {
+		t.Errorf("Esperava encontrar candidato para teclado, obteve: %+v", keyboardCandidates)
 	}
 }
 

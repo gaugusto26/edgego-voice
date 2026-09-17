@@ -9,16 +9,13 @@ Coloque seus arquivos de áudio de efeitos sonoros nesta pasta para que o **Edge
 O sistema busca os arquivos na seguinte ordem de prioridade:
 
 1. **Específico por Voz**: `{NomeDaVoz}_{efeito}.mp3` ou `{NomeDaVoz}_{efeito}.wav`
-   - Exemplo: `pt-BR-FranciscaNeural_pigarro.mp3`
-   - Exemplo: `Francisca_risada.mp3`
-   - Exemplo: `Thalita_tosse.mp3`
+   - Exemplo: `pt-BR-FranciscaNeural_teclado.wav`
+   - Exemplo: `Francisca_notificacao.mp3`
 
 2. **Genérico (Qualquer Voz)**: `{efeito}.mp3` ou `{efeito}.wav`
-   - Exemplo: `pigarro.mp3`
-   - Exemplo: `tosse.mp3`
-   - Exemplo: `risada.mp3`
-   - Exemplo: `suspiro.mp3`
-   - Exemplo: `respiracao.mp3`
+   - Exemplo: `efeito-teclado.wav`
+   - Exemplo: `callcenter-ambiente.wav`
+   - Exemplo: `ruido-fundo.wav`
    - Exemplo: `aplausos.mp3`
    - Exemplo: `notificacao.mp3`
 
@@ -28,9 +25,9 @@ O sistema busca os arquivos na seguinte ordem de prioridade:
 
 Qualquer arquivo que você colocar aqui fica disponível imediatamente via tag de texto:
 
-- Se você tiver `sfx/pigarro.mp3` $\rightarrow$ use no texto: `Olá [som:pigarro] como vai?`
-- Se você tiver `sfx/risada.mp3` $\rightarrow$ use no texto: `Isso foi muito bom [som:risada] mesmo!`
+- Se você tiver `sfx/efeito-teclado.wav` $\rightarrow$ use no texto: `Só um momento [teclado:3s] localizei seu cadastro!`
 - Se você tiver `sfx/notificacao.wav` $\rightarrow$ use no texto: `[som:notificacao] Você recebeu uma mensagem.`
+- Se você tiver `sfx/aplausos.mp3` $\rightarrow$ use no texto: `Parabéns pelo resultado! [som:aplausos]`
 - Se você tiver `sfx/meu_efeito.mp3` $\rightarrow$ use no texto: `[som:meu_efeito] texto aqui.`
 
 ---
