@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -40,10 +39,9 @@ type metadataJSON struct {
 }
 
 const (
-	winEpoch           = 11644473600
 	trustedClientToken = "6A5AA1D4EAFF4E9FB37E23D68491D6F4"
 	chromiumVersion    = "143.0.3650.75"
-	secMSGECVersion    = "1-" + chromiumVersion
+	secMSGECVersion    = "2-" + chromiumVersion
 	edgeEndpoint       = "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1"
 	originHeader       = "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold"
 	userAgentHeader    = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
@@ -94,17 +92,6 @@ func extractLangFromVoice(voice string) string {
 	return "pt-BR"
 }
 
-// generateSecMSGEC gera o token DRM baseado no timestamp Windows epoch e hash SHA256.
-func generateSecMSGEC() string {
-	ticks := time.Now().UTC().Unix()
-	ticks += winEpoch
-	ticks -= ticks % 300
-	ticks *= 10000000 // intervalos de 100 nanossegundos
-
-	strToHash := fmt.Sprintf("%d%s", ticks, trustedClientToken)
-	hash := sha256.Sum256([]byte(strToHash))
-	return strings.ToUpper(hex.EncodeToString(hash[:]))
-}
 
 // generateMUID gera um ID aleatório para o cabeçalho Cookie.
 func generateMUID() string {
@@ -116,7 +103,7 @@ func generateMUID() string {
 // dialConnection cria uma conexão WebSocket direta e otimizada com TCP_NODELAY.
 func (c *Client) dialConnection(ctx context.Context) (*websocket.Conn, error) {
 	connectionID := strings.ReplaceAll(uuid.New().String(), "-", "")
-	secMSGEC := generateSecMSGEC()
+	secMSGEC := generateSecMSGECV2(float64(time.Now().UTC().UnixNano()) / 1e9)
 
 	wsURL := fmt.Sprintf(
 		"%s?TrustedClientToken=%s&Sec-MS-GEC=%s&Sec-MS-GEC-Version=%s&ConnectionId=%s",
@@ -166,22 +153,39 @@ func (c *Client) Synthesize(ctx context.Context, opts SynthesizeOptions) ([]byte
 
 // SynthesizeWithSubtitles gera o áudio e coleta as legendas de palavras e sentenças sincronizadas.
 func (c *Client) SynthesizeWithSubtitles(ctx context.Context, opts SynthesizeOptions) ([]byte, []subtitles.WordTimestamp, []subtitles.SentenceCue, error) {
-	var buf bytes.Buffer
-	words, sentences, err := c.SynthesizeStreamWithSubtitles(ctx, opts, &buf)
-	if err != nil {
-		return nil, nil, nil, err
+	// O Edge TTS fecha a conexao de vez em quando (reset do peer). Uma unica
+	// tentativa transformaria isso em audio ausente; ate tres tentativas com
+	// espera curta mantem a entrega. Cada tentativa usa um buffer proprio para
+	// nunca devolver audio duplicado.
+	var lastErr error
+	for attempt := 1; attempt <= synthesisAttempts; attempt++ {
+		var buf bytes.Buffer
+		words, sentences, err := c.synthesizeStreamOnce(ctx, opts, &buf)
+		if err == nil {
+			return buf.Bytes(), words, sentences, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			return nil, nil, nil, err
+		}
+		slog.Warn("Falha ao sintetizar audio, tentando novamente", "tentativa", attempt, "erro", err)
+		select {
+		case <-ctx.Done():
+			return nil, nil, nil, ctx.Err()
+		case <-time.After(synthesisBackoff * time.Duration(attempt)):
+		}
 	}
-	return buf.Bytes(), words, sentences, nil
+	return nil, nil, nil, lastErr
 }
 
 // SynthesizeStream gera o áudio completo e íntegro com streaming em tempo real.
 func (c *Client) SynthesizeStream(ctx context.Context, opts SynthesizeOptions, writer io.Writer) error {
-	_, _, err := c.SynthesizeStreamWithSubtitles(ctx, opts, writer)
+	_, _, err := c.synthesizeStreamOnce(ctx, opts, writer)
 	return err
 }
 
 // SynthesizeStreamWithSubtitles gera o áudio em tempo real e retorna os metadados de legendas.
-func (c *Client) SynthesizeStreamWithSubtitles(ctx context.Context, opts SynthesizeOptions, writer io.Writer) ([]subtitles.WordTimestamp, []subtitles.SentenceCue, error) {
+func (c *Client) synthesizeStreamOnce(ctx context.Context, opts SynthesizeOptions, writer io.Writer) ([]subtitles.WordTimestamp, []subtitles.SentenceCue, error) {
 	conn, err := c.dialConnection(ctx)
 	if err != nil {
 		return nil, nil, err
