@@ -1,4 +1,4 @@
-package edgetts
+﻿package edgetts
 
 // FormatInfo armazena o formato do Edge TTS e o MIME type correspondente.
 type FormatInfo struct {
@@ -14,6 +14,12 @@ var formatMap = map[string]FormatInfo{
 	"opus": {
 		EdgeFormat: "webm-24khz-16bit-mono-opus",
 		MimeType:   "audio/webm; codecs=opus",
+	},
+	// WhatsApp exige OGG/Opus. O Edge nao emite OGG: o servico converte o WebM
+	// com ffmpeg antes de responder.
+	"ogg": {
+		EdgeFormat: "webm-24khz-16bit-mono-opus",
+		MimeType:   "audio/ogg; codecs=opus",
 	},
 	"wav": {
 		EdgeFormat: "riff-24khz-16bit-mono-pcm",

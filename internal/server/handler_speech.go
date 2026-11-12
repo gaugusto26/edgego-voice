@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"crypto/subtle"
@@ -262,6 +262,18 @@ func (h *SpeechHandler) GenerateSpeechHandler(w http.ResponseWriter, r *http.Req
 		subResult = res.subResult
 	}
 
+	// O Edge entrega Opus dentro de WebM; o WhatsApp exige OGG/Opus. A conversao
+	// acontece uma vez, aqui, antes de responder ao cliente.
+	if format == "ogg" {
+		converted, convErr := convertToOggOpus(audioData)
+		if convErr != nil {
+			slog.Error("Falha ao converter audio para OGG", "error", convErr)
+			writeJSONError(w, http.StatusBadGateway, "Nao foi possivel preparar o audio para envio por WhatsApp.", "audio_conversion_error")
+			return
+		}
+		audioData = converted
+	}
+
 	if req.ResponseFormat == "verbose_json" || req.WithSubtitles {
 		resp := SpeechVerboseResponse{
 			Audio:      base64.StdEncoding.EncodeToString(audioData),
@@ -498,6 +510,29 @@ func (h *SpeechHandler) synthesizeForPersona(w http.ResponseWriter, r *http.Requ
 		subResult = res.subResult
 	}
 
+	// O Edge entrega Opus dentro de WebM; o WhatsApp exige OGG/Opus. A conversao
+	// acontece uma vez, aqui, antes de responder ao cliente.
+	if format == "ogg" {
+		converted, convErr := convertToOggOpus(audioData)
+		if convErr != nil {
+			slog.Error("Falha ao converter audio para OGG", "error", convErr)
+			writeJSONError(w, http.StatusBadGateway, "Nao foi possivel preparar o audio para envio por WhatsApp.", "audio_conversion_error")
+			return
+		}
+		audioData = converted
+	}
+
+	// O Edge entrega Opus dentro de WebM; o WhatsApp exige OGG/Opus. A conversao
+	// acontece uma vez, aqui, antes de responder ao cliente.
+	if format == "ogg" {
+		converted, convErr := convertToOggOpus(audioData)
+		if convErr != nil {
+			slog.Error("Falha ao converter audio para OGG", "persona", p.ID, "error", convErr)
+			writeJSONError(w, http.StatusBadGateway, "Nao foi possivel preparar o audio para envio por WhatsApp.", "audio_conversion_error")
+			return
+		}
+		audioData = converted
+	}
 	if req.ResponseFormat == "verbose_json" || req.WithSubtitles {
 		resp := SpeechVerboseResponse{
 			Audio:      base64.StdEncoding.EncodeToString(audioData),
